@@ -98,12 +98,16 @@ export default function Home() {
       const WINDOW_MS = 60000 // 60 seconds
       const requestTimestamps = [] // Track when requests were made
       
+      console.log(`Starting to process ${totalLines} lines with rate limiting (max ${MAX_REQUESTS_PER_MINUTE} requests/minute)`)
+      
       // Helper function to wait until we can make a request
-      const waitForRateLimit = async () => {
+      const waitForRateLimit = async (lineNumber) => {
         const now = Date.now()
         
         // Remove timestamps older than 1 minute
         const recentRequests = requestTimestamps.filter(timestamp => now - timestamp < WINDOW_MS)
+        
+        console.log(`Line ${lineNumber}: Recent requests in last minute: ${recentRequests.length}/${MAX_REQUESTS_PER_MINUTE}`)
         
         // If we've made 10 requests in the last minute, wait
         if (recentRequests.length >= MAX_REQUESTS_PER_MINUTE) {
@@ -112,6 +116,7 @@ export default function Home() {
           
           if (waitTime > 0) {
             const waitSeconds = Math.ceil(waitTime / 1000)
+            console.log(`Line ${lineNumber}: Rate limit reached, waiting ${waitSeconds} seconds...`)
             setStatus({ 
               type: 'info', 
               message: `等待速率限制 Waiting for rate limit... (${waitSeconds}秒 seconds)` 
@@ -119,16 +124,13 @@ export default function Home() {
             await new Promise(resolve => setTimeout(resolve, waitTime))
           }
         }
-        
-        // Record this request timestamp
-        requestTimestamps.push(Date.now())
       }
       
       for (let i = 0; i < lyricLines.length; i++) {
         const line = lyricLines[i]
         
         // Wait for rate limit before making request
-        await waitForRateLimit()
+        await waitForRateLimit(i + 1)
         
         // Update status for current line being processed
         const remainingLines = totalLines - i
@@ -138,21 +140,39 @@ export default function Home() {
           message: `处理中 Processing line ${i + 1} of ${totalLines}... (~${Math.ceil(estimatedSeconds / 60)}分钟剩余 ~${Math.ceil(estimatedSeconds / 60)}min remaining)` 
         })
         
+        const requestStartTime = Date.now()
+        console.log(`Line ${i + 1}: Making API request for: "${line.original.substring(0, 50)}..."`)
+        
         try {
           const response = await fetch('/api/process-lyrics', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: line.original }),
           })
+          
+          // Record request timestamp AFTER the request completes
+          requestTimestamps.push(Date.now())
+          const requestDuration = Date.now() - requestStartTime
+          console.log(`Line ${i + 1}: API response received (${response.status}) in ${requestDuration}ms`)
 
           let data
           try {
-            data = await response.json()
+            const responseText = await response.text()
+            console.log(`Line ${i + 1}: Response body:`, responseText.substring(0, 200))
+            data = JSON.parse(responseText)
+            console.log(`Line ${i + 1}: Parsed data:`, { 
+              hasSimplified: !!data.simplified, 
+              hasPinyin: !!data.pinyin,
+              simplified: data.simplified?.substring(0, 50),
+              pinyin: data.pinyin?.substring(0, 50),
+              error: data.error
+            })
           } catch (jsonError) {
-            console.error(`Failed to parse JSON response for line ${i + 1}:`, jsonError)
+            console.error(`Line ${i + 1}: Failed to parse JSON response:`, jsonError)
             // If we can't parse JSON, use original text
             processed.push({
               ...line,
+              type: 'lyric',
               simplified: line.original,
               pinyin: '',
             })
@@ -225,9 +245,11 @@ export default function Home() {
             } else {
               processed.push({
                 ...line,
+                type: 'lyric',
                 simplified: data.simplified || line.original,
                 pinyin: data.pinyin || '',
               })
+              console.log(`Line ${i + 1}: Successfully processed`)
             }
           }
 
@@ -235,43 +257,63 @@ export default function Home() {
           const currentProgress = Math.round(((i + 1) / totalLines) * 100)
           setProgress(currentProgress)
         } catch (error) {
-          console.error(`Error processing line ${i + 1} (${line.original}):`, error)
+          console.error(`Line ${i + 1}: Error processing (${line.original}):`, error)
           // On error, keep original text but mark pinyin as empty
           processed.push({
             ...line,
+            type: 'lyric',
             simplified: line.original,
             pinyin: '',
           })
         }
       }
+      
+      console.log(`Processing complete. Processed ${processed.length} lines out of ${totalLines} total`)
 
       // Combine sections and processed lyrics (but don't include section markers in preview)
       const finalPreview = []
       let processedIndex = 0
       let currentSectionForDisplay = ''
       
+      console.log(`Building preview: ${parsed.length} parsed items, ${processed.length} processed lines`)
+      
       for (const item of parsed) {
         if (item.type === 'section') {
           // Store section for next lyrics, but don't add to preview
           currentSectionForDisplay = item.section
+          console.log(`Skipping section marker: ${item.section}`)
           // Skip adding section markers to preview
           continue
         } else if (item.type === 'lyric') {
           // Add processed lyric with current section
           const processedLine = processed[processedIndex]
           if (processedLine) {
-            finalPreview.push({
+            const previewItem = {
               ...processedLine,
               type: 'lyric', // Ensure type is set
               section: currentSectionForDisplay
-            })
+            }
+            finalPreview.push(previewItem)
+            console.log(`Added to preview: line ${processedIndex + 1} (section: ${currentSectionForDisplay})`)
+          } else {
+            console.warn(`No processed line found for index ${processedIndex}`)
           }
           processedIndex++
+        } else {
+          console.warn(`Unknown item type: ${item.type}`, item)
         }
       }
 
       // Double-check: filter out any section markers that might have slipped through
-      const filteredPreview = finalPreview.filter(item => item.type === 'lyric')
+      const filteredPreview = finalPreview.filter(item => {
+        const isLyric = item.type === 'lyric'
+        if (!isLyric) {
+          console.warn(`Filtering out non-lyric item:`, item)
+        }
+        return isLyric
+      })
+      
+      console.log(`Final preview: ${filteredPreview.length} items (filtered from ${finalPreview.length})`)
       setPreview(filteredPreview)
       setStatus({ type: 'success', message: '处理完成 Processing complete!' })
     } catch (error) {
