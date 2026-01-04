@@ -57,11 +57,11 @@ Text: ${text}`
         
         // Check if it's a rate limit error
         const errorMessage = apiError.message || String(apiError)
-        if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
-          // Rate limited - wait before retrying
+        if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+          // Rate limited - wait longer before retrying (10 RPM = 6 seconds minimum, use 7s)
           if (attempt < maxRetries) {
-            const waitTime = Math.pow(2, attempt) * 1000 // Exponential backoff: 2s, 4s, 8s
-            console.log(`Rate limited, waiting ${waitTime}ms before retry...`)
+            const waitTime = 7000 + (attempt * 1000) // 7s, 8s, 9s
+            console.log(`Rate limited (429/RESOURCE_EXHAUSTED), waiting ${waitTime}ms before retry...`)
             await new Promise(resolve => setTimeout(resolve, waitTime))
             continue
           }
