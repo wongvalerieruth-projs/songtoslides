@@ -73,7 +73,10 @@ export default function Home() {
 
     setIsProcessing(true)
     setProgress(0)
-    setStatus({ type: 'info', message: '处理中 Processing...' })
+    setStatus({ 
+      type: 'info', 
+      message: `处理中 Processing... (速率限制: 10请求/分钟 Rate limit: 10 requests/minute - 每行约7秒 ~7s per line)` 
+    })
 
     try {
       const { parsed, metadata: extractedMetadata } = parseLyrics(lyricsText)
@@ -89,10 +92,51 @@ export default function Home() {
         return
       }
 
-      // Process each line
+      // Client-side rate limiter: Track requests in a sliding window (10 requests per 60 seconds)
       const processed = []
+      const MAX_REQUESTS_PER_MINUTE = 10
+      const WINDOW_MS = 60000 // 60 seconds
+      const requestTimestamps = [] // Track when requests were made
+      
+      // Helper function to wait until we can make a request
+      const waitForRateLimit = async () => {
+        const now = Date.now()
+        
+        // Remove timestamps older than 1 minute
+        const recentRequests = requestTimestamps.filter(timestamp => now - timestamp < WINDOW_MS)
+        
+        // If we've made 10 requests in the last minute, wait
+        if (recentRequests.length >= MAX_REQUESTS_PER_MINUTE) {
+          const oldestRequest = Math.min(...recentRequests)
+          const waitTime = WINDOW_MS - (now - oldestRequest) + 1000 // Add 1s buffer
+          
+          if (waitTime > 0) {
+            const waitSeconds = Math.ceil(waitTime / 1000)
+            setStatus({ 
+              type: 'info', 
+              message: `等待速率限制 Waiting for rate limit... (${waitSeconds}秒 seconds)` 
+            })
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+          }
+        }
+        
+        // Record this request timestamp
+        requestTimestamps.push(Date.now())
+      }
+      
       for (let i = 0; i < lyricLines.length; i++) {
         const line = lyricLines[i]
+        
+        // Wait for rate limit before making request
+        await waitForRateLimit()
+        
+        // Update status for current line being processed
+        const remainingLines = totalLines - i
+        const estimatedSeconds = Math.ceil((remainingLines * 6000) / 1000) // Rough estimate: 6s per line
+        setStatus({ 
+          type: 'info', 
+          message: `处理中 Processing line ${i + 1} of ${totalLines}... (~${Math.ceil(estimatedSeconds / 60)}分钟剩余 ~${Math.ceil(estimatedSeconds / 60)}min remaining)` 
+        })
         
         try {
           const response = await fetch('/api/process-lyrics', {
