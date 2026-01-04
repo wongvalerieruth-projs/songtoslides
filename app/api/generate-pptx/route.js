@@ -6,6 +6,8 @@ export async function POST(request) {
   try {
     const { preview, metadata, templateBase64 } = await request.json()
 
+    console.log('Received request - preview length:', preview?.length, 'templateBase64 exists:', !!templateBase64, 'templateBase64 length:', templateBase64?.length)
+
     if (!preview || !Array.isArray(preview)) {
       return NextResponse.json(
         { error: 'Preview data is required' },
@@ -15,8 +17,7 @@ export async function POST(request) {
 
     const lyricLines = preview.filter(item => item.type === 'lyric')
 
-    if (!templateBase64) {
-      // Fallback: Generate from scratch if no template
+    if (!templateBase64 || typeof templateBase64 !== 'string' || templateBase64.length === 0) {
       return NextResponse.json(
         { error: 'Template file is required. Please upload a template first.' },
         { status: 400 }
