@@ -561,8 +561,8 @@ export default function Home() {
             </div>
             <p className="text-xs text-gray-500 mt-4">
               <strong>模板占位符 Template Placeholders:</strong><br />
-              {pinyin1}, {chinese1}, {pinyin2}, {chinese2}, {section}<br />
-              {title}, {credits} (for title slide)
+              {'{pinyin1}'}, {'{chinese1}'}, {'{pinyin2}'}, {'{chinese2}'}, {'{section}'}<br />
+              {'{title}'}, {'{credits}'} (for title slide)
             </p>
             <p className="text-xs text-green-600 mt-2 font-medium">
               ✓ 模板支持已启用 Template support is active
