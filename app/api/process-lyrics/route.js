@@ -2,21 +2,24 @@ import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(request) {
+  let text = ''
+  
   try {
-    const { text } = await request.json()
+    const body = await request.json()
+    text = body.text || ''
 
     if (!text || !text.trim()) {
       return NextResponse.json(
-        { error: 'Text is required' },
-        { status: 400 }
+        { error: 'Text is required', simplified: '', pinyin: '' },
+        { status: 200 } // Return 200 so frontend can handle it
       )
     }
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'GEMINI_API_KEY is not configured' },
-        { status: 500 }
+        { error: 'GEMINI_API_KEY is not configured', simplified: text, pinyin: '' },
+        { status: 200 } // Return 200 so frontend can handle it
       )
     }
 
@@ -87,6 +90,16 @@ Text: ${text}`
       })
     }
     
+    // Check if resultText exists
+    if (!resultText) {
+      console.error('resultText is undefined or empty')
+      return NextResponse.json({
+        error: 'Empty response from API',
+        simplified: text || '',
+        pinyin: ''
+      })
+    }
+    
     // Strip markdown code fences if present
     resultText = resultText.replace(/```json|```/g, '').trim()
     
@@ -136,8 +149,10 @@ Text: ${text}`
     })
   } catch (error) {
     console.error('Unexpected error processing lyrics:', error)
-    console.error('Input text:', text)
+    console.error('Error stack:', error.stack)
+    console.error('Input text:', text || 'N/A')
     // Return original text as fallback with 200 status so frontend can use it
+    // Always return 200, never 500, so frontend can parse the response
     return NextResponse.json({
       error: 'Failed to process lyrics: ' + (error.message || 'Unknown error'),
       simplified: text || '',
