@@ -450,6 +450,9 @@ export default function Home() {
               {pinyin1}, {chinese1}, {pinyin2}, {chinese2}, {section}<br />
               {title}, {credits} (for title slide)
             </p>
+            <p className="text-xs text-green-600 mt-2 font-medium">
+              ✓ 模板支持已启用 Template support is active
+            </p>
           </div>
 
           {/* Lyrics Input */}
