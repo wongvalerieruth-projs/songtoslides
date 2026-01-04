@@ -163,18 +163,18 @@ export default function Home() {
 
           // Handle both success and error responses
           if (!response.ok) {
-            // API returned error status, but might have fallback data
-            console.warn(`API error for line ${i + 1}:`, data.error || `Status ${response.status}`)
+            // API returned error status (including 500), but might have fallback data
+            console.warn(`API error for line ${i + 1} (status ${response.status}):`, data?.error || 'Unknown error')
             
-            // Check if we have any usable data despite the error
-            if (data.simplified && data.simplified !== line.original) {
+            // Even on 500 errors, try to use any data that was returned
+            if (data && data.simplified && data.simplified !== line.original) {
               // Use the fallback data if it's different from original
               processed.push({
                 ...line,
                 simplified: data.simplified,
                 pinyin: data.pinyin || '',
               })
-            } else if (data.simplified) {
+            } else if (data && data.simplified) {
               // API returned original text as simplified (no processing happened)
               processed.push({
                 ...line,
@@ -182,7 +182,8 @@ export default function Home() {
                 pinyin: data.pinyin || '',
               })
             } else {
-              // No usable data, use original
+              // No usable data (500 error with no response body), use original
+              console.warn(`Line ${i + 1} failed with status ${response.status}, using original text`)
               processed.push({
                 ...line,
                 simplified: line.original,
