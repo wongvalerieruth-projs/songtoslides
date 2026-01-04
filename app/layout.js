@@ -3,6 +3,10 @@ import './globals.css'
 export const metadata = {
   title: '歌词幻灯片生成器 | Lyrics Slide Generator',
   description: 'Generate Chinese worship lyrics slides with Pinyin',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon.svg',
+  },
 }
 
 export default function RootLayout({ children }) {
