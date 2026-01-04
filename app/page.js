@@ -38,16 +38,18 @@ export default function Home() {
         continue
       }
 
-      // Check for section markers
-      if (line.match(/^\[(.+)\]/)) {
-        const match = line.match(/^\[(.+)\]/)
-        currentSection = `[${match[1]}]`
+      // Check for section markers (must be exactly [Something] on its own line, with optional whitespace)
+      const trimmedLine = line.trim()
+      const sectionMatch = trimmedLine.match(/^\[(.+)\]$/)
+      if (sectionMatch) {
+        currentSection = `[${sectionMatch[1]}]`
         parsed.push({
           type: 'section',
           section: currentSection,
           original: line,
         })
-        continue
+        console.log(`Found section marker: ${currentSection}`)
+        continue // Skip processing this line - it's a section marker, not a lyric
       }
 
       // Regular lyric line
@@ -82,9 +84,17 @@ export default function Home() {
       const { parsed, metadata: extractedMetadata } = parseLyrics(lyricsText)
       setMetadata(extractedMetadata)
 
-      // Filter only lyric lines for processing
-      const lyricLines = parsed.filter(item => item.type === 'lyric')
+      // Filter only lyric lines for processing (explicitly exclude section markers)
+      const lyricLines = parsed.filter(item => {
+        const isLyric = item.type === 'lyric'
+        if (!isLyric) {
+          console.log(`Filtering out non-lyric item:`, item.type, item.original)
+        }
+        return isLyric
+      })
       const totalLines = lyricLines.length
+      
+      console.log(`Found ${totalLines} lyric lines to process (filtered from ${parsed.length} total items)`)
 
       if (totalLines === 0) {
         setStatus({ type: 'error', message: '未找到歌词行 No lyric lines found' })
@@ -126,8 +136,22 @@ export default function Home() {
         }
       }
       
+      // Ensure we process ALL lines, even if some fail
       for (let i = 0; i < lyricLines.length; i++) {
         const line = lyricLines[i]
+        
+        // Double-check this is actually a lyric line (not a section marker)
+        if (line.type !== 'lyric') {
+          console.warn(`Skipping non-lyric line at index ${i}:`, line)
+          // Still add it to processed array to maintain index alignment
+          processed.push({
+            ...line,
+            type: 'lyric',
+            simplified: line.original,
+            pinyin: '',
+          })
+          continue
+        }
         
         // Wait for rate limit before making request
         await waitForRateLimit(i + 1)
@@ -143,6 +167,7 @@ export default function Home() {
         const requestStartTime = Date.now()
         console.log(`Line ${i + 1}: Making API request for: "${line.original.substring(0, 50)}..."`)
         
+        let requestCompleted = false
         try {
           const response = await fetch('/api/process-lyrics', {
             method: 'POST',
@@ -154,6 +179,7 @@ export default function Home() {
           requestTimestamps.push(Date.now())
           const requestDuration = Date.now() - requestStartTime
           console.log(`Line ${i + 1}: API response received (${response.status}) in ${requestDuration}ms`)
+          requestCompleted = true
 
           let data
           try {
@@ -178,7 +204,7 @@ export default function Home() {
             })
             const currentProgress = Math.round(((i + 1) / totalLines) * 100)
             setProgress(currentProgress)
-            continue
+            // Don't continue - let it fall through to finally block
           }
 
           // Handle both success and error responses
@@ -191,6 +217,7 @@ export default function Home() {
               // Use the fallback data if it's different from original
               processed.push({
                 ...line,
+                type: 'lyric',
                 simplified: data.simplified,
                 pinyin: data.pinyin || '',
               })
@@ -198,6 +225,7 @@ export default function Home() {
               // API returned original text as simplified (no processing happened)
               processed.push({
                 ...line,
+                type: 'lyric',
                 simplified: line.original,
                 pinyin: data.pinyin || '',
               })
@@ -206,6 +234,7 @@ export default function Home() {
               console.warn(`Line ${i + 1} failed with status ${response.status}, using original text`)
               processed.push({
                 ...line,
+                type: 'lyric',
                 simplified: line.original,
                 pinyin: '',
               })
@@ -213,16 +242,18 @@ export default function Home() {
             
             const currentProgress = Math.round(((i + 1) / totalLines) * 100)
             setProgress(currentProgress)
+            // Data is already pushed, continue to next iteration
             continue
           }
           
-          // Validate that we got actual processed data
+          // Response is OK (200), validate that we got actual processed data
           if (data.error) {
             console.warn(`API returned error for line ${i + 1}:`, data.error)
             // If API returns error but has fallback data, use it
             if (data.simplified && data.simplified !== line.original) {
               processed.push({
                 ...line,
+                type: 'lyric',
                 simplified: data.simplified,
                 pinyin: data.pinyin || '',
               })
@@ -239,6 +270,7 @@ export default function Home() {
               console.warn(`Line ${i + 1} returned empty results, using original text`)
               processed.push({
                 ...line,
+                type: 'lyric',
                 simplified: line.original,
                 pinyin: '',
               })
@@ -259,16 +291,46 @@ export default function Home() {
         } catch (error) {
           console.error(`Line ${i + 1}: Error processing (${line.original}):`, error)
           // On error, keep original text but mark pinyin as empty
+          // Always add to processed array to ensure we don't skip lines
           processed.push({
             ...line,
             type: 'lyric',
             simplified: line.original,
             pinyin: '',
           })
+          // Update progress even on error
+          const currentProgress = Math.round(((i + 1) / totalLines) * 100)
+          setProgress(currentProgress)
+        } finally {
+          // Ensure request timestamp is recorded even if there was an error
+          if (!requestCompleted) {
+            requestTimestamps.push(Date.now())
+            console.log(`Line ${i + 1}: Request timestamp recorded after error`)
+          }
         }
       }
       
       console.log(`Processing complete. Processed ${processed.length} lines out of ${totalLines} total`)
+      
+      // Verify we processed all lines
+      if (processed.length !== totalLines) {
+        console.error(`MISMATCH: Expected ${totalLines} processed lines, got ${processed.length}`)
+        // Fill in any missing lines
+        while (processed.length < totalLines) {
+          const missingIndex = processed.length
+          if (missingIndex < lyricLines.length) {
+            processed.push({
+              ...lyricLines[missingIndex],
+              type: 'lyric',
+              simplified: lyricLines[missingIndex].original,
+              pinyin: '',
+            })
+            console.log(`Added missing line at index ${missingIndex}`)
+          } else {
+            break
+          }
+        }
+      }
 
       // Combine sections and processed lyrics (but don't include section markers in preview)
       const finalPreview = []
@@ -282,12 +344,12 @@ export default function Home() {
           // Store section for next lyrics, but don't add to preview
           currentSectionForDisplay = item.section
           console.log(`Skipping section marker: ${item.section}`)
-          // Skip adding section markers to preview
+          // Skip adding section markers to preview - DO NOT CONTINUE TO PROCESS
           continue
         } else if (item.type === 'lyric') {
           // Add processed lyric with current section
           const processedLine = processed[processedIndex]
-          if (processedLine) {
+          if (processedLine && processedLine.type === 'lyric') {
             const previewItem = {
               ...processedLine,
               type: 'lyric', // Ensure type is set
@@ -296,11 +358,13 @@ export default function Home() {
             finalPreview.push(previewItem)
             console.log(`Added to preview: line ${processedIndex + 1} (section: ${currentSectionForDisplay})`)
           } else {
-            console.warn(`No processed line found for index ${processedIndex}`)
+            console.warn(`No valid processed line found for index ${processedIndex}:`, processedLine)
+            // Still increment to maintain alignment
           }
           processedIndex++
         } else {
-          console.warn(`Unknown item type: ${item.type}`, item)
+          console.warn(`Unknown item type in parsed array: ${item.type}`, item)
+          // Don't add unknown types to preview
         }
       }
 
