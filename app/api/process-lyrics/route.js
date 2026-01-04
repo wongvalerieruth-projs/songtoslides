@@ -36,21 +36,113 @@ export async function POST(request) {
 
 Text: ${text}`
 
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    let resultText = response.text().trim()
+    let result
+    let response
+    let resultText
+    
+    // Retry logic for API calls (handles rate limits and transient errors)
+    const maxRetries = 3
+    let lastError = null
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        result = await model.generateContent(prompt)
+        response = await result.response
+        resultText = response.text().trim()
+        lastError = null
+        break // Success, exit retry loop
+      } catch (apiError) {
+        lastError = apiError
+        console.error(`Gemini API error (attempt ${attempt}/${maxRetries}):`, apiError)
+        
+        // Check if it's a rate limit error
+        const errorMessage = apiError.message || String(apiError)
+        if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+          // Rate limited - wait before retrying
+          if (attempt < maxRetries) {
+            const waitTime = Math.pow(2, attempt) * 1000 // Exponential backoff: 2s, 4s, 8s
+            console.log(`Rate limited, waiting ${waitTime}ms before retry...`)
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+            continue
+          }
+        }
+        
+        // If it's the last attempt or not a rate limit, break
+        if (attempt === maxRetries) {
+          break
+        }
+        
+        // Wait before retry for other errors
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+      }
+    }
+    
+    if (lastError) {
+      console.error('Gemini API failed after retries:', lastError)
+      // Return fallback data with 200 status so frontend can use it
+      return NextResponse.json({
+        error: 'API request failed after retries',
+        simplified: text || '',
+        pinyin: ''
+      })
+    }
     
     // Strip markdown code fences if present
     resultText = resultText.replace(/```json|```/g, '').trim()
     
-    const parsed = JSON.parse(resultText)
-    return NextResponse.json(parsed)
+    // Try to extract JSON from response
+    let parsed
+    try {
+      parsed = JSON.parse(resultText)
+    } catch (parseError) {
+      // Try to find JSON object in the response
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0])
+        } catch (e) {
+          console.error('Failed to parse extracted JSON:', e)
+          // Return fallback with 200 status
+          return NextResponse.json({
+            error: 'Failed to parse API response',
+            simplified: text || '',
+            pinyin: ''
+          })
+        }
+      } else {
+        console.error('No JSON found in response:', resultText.substring(0, 200))
+        // Return fallback with 200 status
+        return NextResponse.json({
+          error: 'No valid JSON in API response',
+          simplified: text || '',
+          pinyin: ''
+        })
+      }
+    }
+    
+    // Validate response has required fields
+    if (!parsed.simplified && !parsed.pinyin) {
+      // Fallback: return original text if parsing failed
+      return NextResponse.json({
+        error: 'Empty response from API',
+        simplified: text || '',
+        pinyin: ''
+      })
+    }
+    
+    return NextResponse.json({
+      simplified: parsed.simplified || text,
+      pinyin: parsed.pinyin || ''
+    })
   } catch (error) {
-    console.error('Error processing lyrics:', error)
-    return NextResponse.json(
-      { error: 'Failed to process lyrics', simplified: text, pinyin: text },
-      { status: 500 }
-    )
+    console.error('Unexpected error processing lyrics:', error)
+    console.error('Input text:', text)
+    // Return original text as fallback with 200 status so frontend can use it
+    return NextResponse.json({
+      error: 'Failed to process lyrics: ' + (error.message || 'Unknown error'),
+      simplified: text || '',
+      pinyin: ''
+    })
   }
 }
 
