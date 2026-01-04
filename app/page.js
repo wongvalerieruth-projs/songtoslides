@@ -517,11 +517,15 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            歌词幻灯片生成器
-          </h1>
-          <p className="text-xl text-gray-600">Lyrics Slide Generator</p>
+        <div className="text-center mb-10">
+          <div className="inline-block p-6 rounded-2xl bg-white/90 backdrop-blur-md shadow-xl border-2 border-purple-200/50 mb-4">
+            <h1 className="text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 tracking-tight">
+              歌词幻灯片生成器
+            </h1>
+            <p className="text-2xl font-semibold text-gray-700 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
+              Lyrics Slide Generator
+            </p>
+          </div>
         </div>
 
         {/* Status Message */}
