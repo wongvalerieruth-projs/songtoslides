@@ -77,11 +77,17 @@ export async function POST(request) {
 
     // Replace text in slides
     // We'll replace placeholders like {pinyin1}, {chinese1}, {pinyin2}, {chinese2}, {section}
+    // Note: If line2 is null (odd number of lines), {pinyin2} and {chinese2} will be replaced with empty strings
     let slideIndex = 0
     for (const slide of slidesToUpdate) {
       if (slideIndex >= lyricPairs.length) break
 
       const pair = lyricPairs[slideIndex]
+      
+      // Strip brackets from section name for this pair (e.g., [Chorus 2] -> Chorus 2)
+      const sectionName = pair.line1?.section ? pair.line1.section.replace(/^\[|\]$/g, '') : ''
+      
+      console.log(`Processing slide ${slideIndex + 1}: line1=${!!pair.line1}, line2=${!!pair.line2}, section=${sectionName}`)
       
       // Function to recursively find and replace text in XML
       const replaceTextInElement = (element) => {
@@ -95,12 +101,15 @@ export async function POST(request) {
                 element['a:t'].forEach(textEl => {
                   if (typeof textEl === 'string') {
                     // Replace placeholders
+                    // If line2 is null (odd number of lines), replace with empty string so line 2 doesn't show
+                    const pinyin2 = pair.line2 ? (pair.line2.pinyin || '') : ''
+                    const chinese2 = pair.line2 ? (pair.line2.simplified || '') : ''
                     let newText = textEl
                       .replace(/{pinyin1}/g, pair.line1?.pinyin || '')
                       .replace(/{chinese1}/g, pair.line1?.simplified || '')
-                      .replace(/{pinyin2}/g, pair.line2?.pinyin || '')
-                      .replace(/{chinese2}/g, pair.line2?.simplified || '')
-                      .replace(/{section}/g, pair.line1?.section || '')
+                      .replace(/{pinyin2}/g, pinyin2)
+                      .replace(/{chinese2}/g, chinese2)
+                      .replace(/{section}/g, sectionName)
                     
                     // If no placeholders found, try common patterns
                     if (newText === textEl && textEl.trim()) {
@@ -123,12 +132,15 @@ export async function POST(request) {
                     }
                   } else if (typeof textEl === 'object' && textEl._) {
                     // Handle text with attributes
+                    // If line2 is null (odd number of lines), replace with empty string
+                    const pinyin2 = pair.line2 ? (pair.line2.pinyin || '') : ''
+                    const chinese2 = pair.line2 ? (pair.line2.simplified || '') : ''
                     let newText = textEl._
                       .replace(/{pinyin1}/g, pair.line1?.pinyin || '')
                       .replace(/{chinese1}/g, pair.line1?.simplified || '')
-                      .replace(/{pinyin2}/g, pair.line2?.pinyin || '')
-                      .replace(/{chinese2}/g, pair.line2?.simplified || '')
-                      .replace(/{section}/g, pair.line1?.section || '')
+                      .replace(/{pinyin2}/g, pinyin2)
+                      .replace(/{chinese2}/g, chinese2)
+                      .replace(/{section}/g, sectionName)
                     
                     if (newText !== textEl._) {
                       textEl._ = newText
@@ -136,19 +148,25 @@ export async function POST(request) {
                   }
                 })
               } else if (typeof element['a:t'] === 'string') {
+                // If line2 is null (odd number of lines), replace with empty string
+                const pinyin2 = pair.line2 ? (pair.line2.pinyin || '') : ''
+                const chinese2 = pair.line2 ? (pair.line2.simplified || '') : ''
                 element['a:t'] = element['a:t']
                   .replace(/{pinyin1}/g, pair.line1?.pinyin || '')
                   .replace(/{chinese1}/g, pair.line1?.simplified || '')
-                  .replace(/{pinyin2}/g, pair.line2?.pinyin || '')
-                  .replace(/{chinese2}/g, pair.line2?.simplified || '')
-                  .replace(/{section}/g, pair.line1?.section || '')
+                  .replace(/{pinyin2}/g, pinyin2)
+                  .replace(/{chinese2}/g, chinese2)
+                  .replace(/{section}/g, sectionName)
               } else if (typeof element['a:t'] === 'object' && element['a:t']._) {
+                // If line2 is null (odd number of lines), replace with empty string
+                const pinyin2 = pair.line2 ? (pair.line2.pinyin || '') : ''
+                const chinese2 = pair.line2 ? (pair.line2.simplified || '') : ''
                 element['a:t']._ = element['a:t']._
                   .replace(/{pinyin1}/g, pair.line1?.pinyin || '')
                   .replace(/{chinese1}/g, pair.line1?.simplified || '')
-                  .replace(/{pinyin2}/g, pair.line2?.pinyin || '')
-                  .replace(/{chinese2}/g, pair.line2?.simplified || '')
-                  .replace(/{section}/g, pair.line1?.section || '')
+                  .replace(/{pinyin2}/g, pinyin2)
+                  .replace(/{chinese2}/g, chinese2)
+                  .replace(/{section}/g, sectionName)
               }
             }
             
