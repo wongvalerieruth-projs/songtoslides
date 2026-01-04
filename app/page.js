@@ -157,10 +157,24 @@ export default function Home() {
     setStatus({ type: 'info', message: '生成中 Generating PPTX...' })
 
     try {
+      // Convert template file to base64 if uploaded
+      let templateBase64 = null
+      if (uploadedFile) {
+        templateBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            const base64 = reader.result.split(',')[1] // Remove data:application/...;base64, prefix
+            resolve(base64)
+          }
+          reader.onerror = reject
+          reader.readAsDataURL(uploadedFile)
+        })
+      }
+
       const response = await fetch('/api/generate-pptx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preview, metadata }),
+        body: JSON.stringify({ preview, metadata, templateBase64 }),
       })
 
       if (!response.ok) {
@@ -337,8 +351,10 @@ export default function Home() {
                 </a>
               </p>
             </div>
-            <p className="text-xs text-gray-400 mt-4 italic">
-              Note: Currently generates slides from scratch, template support is placeholder
+            <p className="text-xs text-gray-500 mt-4">
+              <strong>模板占位符 Template Placeholders:</strong><br />
+              {pinyin1}, {chinese1}, {pinyin2}, {chinese2}, {section}<br />
+              {title}, {credits} (for title slide)
             </p>
           </div>
 
@@ -490,3 +506,4 @@ Credits: 词曲：XXX
     </div>
   )
 }
+
