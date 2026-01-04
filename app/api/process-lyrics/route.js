@@ -56,17 +56,32 @@ Text: ${text}`
         break // Success, exit retry loop
       } catch (apiError) {
         lastError = apiError
-        console.error(`Gemini API error (attempt ${attempt}/${maxRetries}):`, apiError)
+        const errorMessage = apiError.message || String(apiError) || JSON.stringify(apiError)
+        console.error(`Gemini API error (attempt ${attempt}/${maxRetries}):`, errorMessage)
+        console.error('Full error object:', apiError)
         
-        // Check if it's a rate limit error
-        const errorMessage = apiError.message || String(apiError)
-        if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+        // Check if it's a rate limit error (429 or RESOURCE_EXHAUSTED)
+        const isRateLimit = errorMessage.includes('429') || 
+                           errorMessage.includes('rate limit') || 
+                           errorMessage.includes('quota') || 
+                           errorMessage.includes('RESOURCE_EXHAUSTED') ||
+                           errorMessage.includes('ResourceExhausted')
+        
+        if (isRateLimit) {
           // Rate limited - wait longer before retrying (10 RPM = 6 seconds minimum, use 7s)
           if (attempt < maxRetries) {
             const waitTime = 7000 + (attempt * 1000) // 7s, 8s, 9s
             console.log(`Rate limited (429/RESOURCE_EXHAUSTED), waiting ${waitTime}ms before retry...`)
             await new Promise(resolve => setTimeout(resolve, waitTime))
             continue
+          } else {
+            // Last attempt failed due to rate limit - return immediately with fallback
+            console.error('Rate limit hit on final attempt, returning fallback')
+            return NextResponse.json({
+              error: 'Rate limit exceeded. Please wait and try again.',
+              simplified: text || '',
+              pinyin: ''
+            })
           }
         }
         
