@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { CheckCircle, AlertCircle, Upload, Loader2 } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { CheckCircle, AlertCircle, Upload, Loader2, File } from 'lucide-react'
 
 export default function Home() {
   const [lyricsText, setLyricsText] = useState('')
@@ -11,6 +11,9 @@ export default function Home() {
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState({ type: null, message: '' })
   const [isGenerating, setIsGenerating] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef(null)
 
   // Extract metadata and parse sections
   const parseLyrics = (text) => {
@@ -185,6 +188,45 @@ export default function Home() {
     }
   }
 
+  const handleFileSelect = (file) => {
+    if (!file) return
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.pptx')) {
+      setStatus({ type: 'error', message: '请上传 .pptx 文件 Please upload a .pptx file' })
+      return
+    }
+
+    setUploadedFile(file)
+    setStatus({ type: 'success', message: `✅ 已上传模板: ${file.name} Template uploaded: ${file.name}` })
+  }
+
+  const handleFileInputChange = (e) => {
+    const file = e.target.files?.[0]
+    handleFileSelect(file)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    handleFileSelect(file)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -242,20 +284,54 @@ export default function Home() {
             <p className="text-sm text-gray-600 mb-4">
               模板 Template
             </p>
-            <div className="border-2 border-dashed border-purple-200 rounded-lg p-8 text-center hover:border-purple-300 transition-colors">
-              <Upload className="w-12 h-12 mx-auto text-purple-400 mb-4" />
-              <p className="text-sm text-gray-500 mb-2">
-                拖放 .pptx 文件或点击上传
-              </p>
-              <p className="text-xs text-gray-400">
-                Drag & drop .pptx file or click to upload
-              </p>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileInputChange}
+              accept=".pptx"
+              className="hidden"
+            />
+            <div
+              onClick={handleUploadClick}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+                isDragging
+                  ? 'border-purple-500 bg-purple-50/50'
+                  : uploadedFile
+                  ? 'border-green-300 bg-green-50/30'
+                  : 'border-purple-200 hover:border-purple-300'
+              }`}
+            >
+              {uploadedFile ? (
+                <>
+                  <File className="w-12 h-12 mx-auto text-green-500 mb-4" />
+                  <p className="text-sm font-medium text-green-700 mb-2">
+                    {uploadedFile.name}
+                  </p>
+                  <p className="text-xs text-green-600">
+                    点击重新上传 Click to upload different file
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-12 h-12 mx-auto text-purple-400 mb-4" />
+                  <p className="text-sm text-gray-500 mb-2">
+                    拖放 .pptx 文件或点击上传
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Drag & drop .pptx file or click to upload
+                  </p>
+                </>
+              )}
               <p className="text-xs text-purple-500 mt-4">
                 <a 
                   href="https://docs.google.com/presentation/d/1QZNR-MGA6bstis0KJiGB3xNHdF-CG9gOJSPgqAHCPKo/edit?usp=sharing" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="underline hover:text-purple-600"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   查看示例模板 View Sample Template
                 </a>
@@ -414,4 +490,3 @@ Credits: 词曲：XXX
     </div>
   )
 }
-
