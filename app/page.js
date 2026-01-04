@@ -420,6 +420,22 @@ export default function Home() {
         throw new Error(error.error || 'Failed to generate PPTX')
       }
 
+      // Get slide count from response header
+      const slideCount = response.headers.get('X-Slide-Count') || '0'
+      const lyricLines = preview.filter(item => item.type === 'lyric')
+      const lyricPairs = Math.ceil(lyricLines.length / 2)
+      const hasTitle = metadata && (metadata.title || metadata.credits)
+      const expectedSlides = (hasTitle ? 1 : 0) + lyricPairs
+
+      // Show success message with slide count before download
+      setStatus({ 
+        type: 'success', 
+        message: `✅ 已生成 ${slideCount} 张幻灯片 (${hasTitle ? '1 标题 + ' : ''}${lyricPairs} 歌词) | Generated ${slideCount} slides (${hasTitle ? '1 title + ' : ''}${lyricPairs} lyrics). 正在下载 Downloading...` 
+      })
+
+      // Small delay to show the message
+      await new Promise(resolve => setTimeout(resolve, 500))
+
       // Download the file
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
@@ -430,8 +446,6 @@ export default function Home() {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-
-      setStatus({ type: 'success', message: '✅ PPTX 文件已生成并下载 PPTX file generated and downloaded!' })
     } catch (error) {
       console.error('Error generating PPTX:', error)
       setStatus({ type: 'error', message: '生成失败 Generation failed: ' + error.message })
@@ -517,15 +531,13 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-10">
-          <div className="inline-block p-6 rounded-2xl bg-white/90 backdrop-blur-md shadow-xl border-2 border-purple-200/50 mb-4">
-            <h1 className="text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 tracking-tight">
-              歌词幻灯片生成器
-            </h1>
-            <p className="text-2xl font-semibold text-gray-700 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-              Lyrics Slide Generator
-            </p>
-          </div>
+        <div className="mb-10">
+          <h1 className="text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-3 tracking-tight">
+            歌词幻灯片生成器
+          </h1>
+          <p className="text-2xl font-semibold text-gray-700 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
+            Lyrics Slide Generator
+          </p>
         </div>
 
         {/* Status Message */}
