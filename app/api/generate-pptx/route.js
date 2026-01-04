@@ -290,8 +290,9 @@ export async function POST(request) {
       // Replace placeholders
       replaceTextInElement(newSlideParsed, pair, sectionName)
       
-      // Create new slide number
-      const newSlideNum = maxSlideNum + (i - firstPairIndex) + 1
+      // Create new slide number (i starts from firstPairIndex, so subtract it to get 0-based index for new slides)
+      const newSlideIndex = i - firstPairIndex
+      const newSlideNum = maxSlideNum + newSlideIndex + 1
       const newSlideKey = `ppt/slides/slide${newSlideNum}.xml`
       newSlideKeys.push(newSlideKey)
       
@@ -345,27 +346,80 @@ export async function POST(request) {
     const presentationRelsXml = await zip.files[presentationRelsKey].async('string')
     const presentationRelsParsed = await xml2js.parseStringPromise(presentationRelsXml)
 
-    const relationships = presentationRelsParsed.Relationships?.Relationship || []
+    // Ensure Relationships structure exists
+    if (!presentationRelsParsed.Relationships) {
+      presentationRelsParsed.Relationships = { '$': { xmlns: 'http://schemas.openxmlformats.org/package/2006/relationships' } }
+    }
+    if (!presentationRelsParsed.Relationships.Relationship) {
+      presentationRelsParsed.Relationships.Relationship = []
+    }
+
+    const relationships = presentationRelsParsed.Relationships.Relationship
+    // Ensure relationships is an array
+    const relationshipsArray = Array.isArray(relationships) ? relationships : [relationships].filter(Boolean)
+    
+    // Find max relationship ID more carefully
     let maxRId = 0
-    relationships.forEach(rel => {
-      const match = rel.$?.Id?.match(/rId(\d+)/)
-      if (match) {
-        const id = parseInt(match[1])
-        if (id > maxRId) maxRId = id
+    relationshipsArray.forEach(rel => {
+      if (rel && rel.$ && rel.$.Id) {
+        const match = rel.$.Id.match(/rId(\d+)/)
+        if (match) {
+          const id = parseInt(match[1])
+          if (id > maxRId) maxRId = id
+        }
       }
     })
 
     // Add new relationships (only for newly created slides)
+    // Make sure rId matches the one used in presentation.xml (rId${newId})
     for (let i = 0; i < numNewSlides; i++) {
-      const newRId = maxRId + i + 1
+      const newId = maxId + i + 1  // Match the ID used in presentation.xml
+      const newRId = `rId${newId}`  // Match the rId used in presentation.xml
+      // Calculate slide number to match what we created earlier
       const newSlideNum = maxSlideNum + i + 1
-      relationships.push({
+      relationshipsArray.push({
         '$': {
-          Id: `rId${newRId}`,
+          Id: newRId,
           Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide',
           Target: `slides/slide${newSlideNum}.xml`
         }
       })
+    }
+
+    // Update the relationships array
+    presentationRelsParsed.Relationships.Relationship = relationshipsArray
+
+    // Update [Content_Types].xml to register new slide files
+    const contentTypesKey = '[Content_Types].xml'
+    if (zip.files[contentTypesKey]) {
+      const contentTypesXml = await zip.files[contentTypesKey].async('string')
+      const contentTypesParsed = await xml2js.parseStringPromise(contentTypesXml)
+      
+      // Ensure Types structure exists
+      if (!contentTypesParsed.Types) {
+        contentTypesParsed.Types = { '$': { xmlns: 'http://schemas.openxmlformats.org/package/2006/content-types' } }
+      }
+      if (!contentTypesParsed.Types.Override) {
+        contentTypesParsed.Types.Override = []
+      }
+      
+      const overrides = Array.isArray(contentTypesParsed.Types.Override) 
+        ? contentTypesParsed.Types.Override 
+        : [contentTypesParsed.Types.Override].filter(Boolean)
+      
+      // Add content type entries for new slides
+      for (let i = 0; i < numNewSlides; i++) {
+        const newSlideNum = maxSlideNum + i + 1
+        overrides.push({
+          '$': {
+            PartName: `/ppt/slides/slide${newSlideNum}.xml`,
+            ContentType: 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml'
+          }
+        })
+      }
+      
+      contentTypesParsed.Types.Override = overrides
+      zip.file(contentTypesKey, builder.buildObject(contentTypesParsed))
     }
 
     // Save updated presentation files
