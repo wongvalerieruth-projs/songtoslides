@@ -12,6 +12,7 @@ export default function Home() {
   const [status, setStatus] = useState({ type: null, message: '' })
   const [isGenerating, setIsGenerating] = useState(false)
   const [uploadedFile, setUploadedFile] = useState(null)
+  const [templateBase64, setTemplateBase64] = useState(null) // Store base64 directly
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -105,23 +106,49 @@ export default function Home() {
             data = await response.json()
           } catch (jsonError) {
             console.error(`Failed to parse JSON response for line ${i + 1}:`, jsonError)
-            throw new Error('Invalid response from server')
+            // If we can't parse JSON, use original text
+            processed.push({
+              ...line,
+              simplified: line.original,
+              pinyin: '',
+            })
+            const currentProgress = Math.round(((i + 1) / totalLines) * 100)
+            setProgress(currentProgress)
+            continue
           }
 
+          // Handle both success and error responses
           if (!response.ok) {
-            // Even if response is not ok, check if we have fallback data
+            // API returned error status, but might have fallback data
+            console.warn(`API error for line ${i + 1}:`, data.error || `Status ${response.status}`)
+            
+            // Check if we have any usable data despite the error
             if (data.simplified && data.simplified !== line.original) {
-              // Use the fallback data if available
+              // Use the fallback data if it's different from original
               processed.push({
                 ...line,
                 simplified: data.simplified,
                 pinyin: data.pinyin || '',
               })
-              const currentProgress = Math.round(((i + 1) / totalLines) * 100)
-              setProgress(currentProgress)
-              continue
+            } else if (data.simplified) {
+              // API returned original text as simplified (no processing happened)
+              processed.push({
+                ...line,
+                simplified: line.original,
+                pinyin: data.pinyin || '',
+              })
+            } else {
+              // No usable data, use original
+              processed.push({
+                ...line,
+                simplified: line.original,
+                pinyin: '',
+              })
             }
-            throw new Error(data.error || `API returned status ${response.status}`)
+            
+            const currentProgress = Math.round(((i + 1) / totalLines) * 100)
+            setProgress(currentProgress)
+            continue
           }
           
           // Validate that we got actual processed data
@@ -182,12 +209,15 @@ export default function Home() {
         if (item.type === 'section') {
           // Store section for next lyrics, but don't add to preview
           currentSectionForDisplay = item.section
-        } else {
+          // Skip adding section markers to preview
+          continue
+        } else if (item.type === 'lyric') {
           // Add processed lyric with current section
           const processedLine = processed[processedIndex]
           if (processedLine) {
             finalPreview.push({
               ...processedLine,
+              type: 'lyric', // Ensure type is set
               section: currentSectionForDisplay
             })
           }
@@ -195,7 +225,9 @@ export default function Home() {
         }
       }
 
-      setPreview(finalPreview)
+      // Double-check: filter out any section markers that might have slipped through
+      const filteredPreview = finalPreview.filter(item => item.type === 'lyric')
+      setPreview(filteredPreview)
       setStatus({ type: 'success', message: '处理完成 Processing complete!' })
     } catch (error) {
       console.error('Error processing lyrics:', error)
@@ -212,7 +244,7 @@ export default function Home() {
       return
     }
 
-    if (!uploadedFile) {
+    if (!uploadedFile || !templateBase64) {
       setStatus({ type: 'error', message: '请先上传模板文件 Please upload a template file first' })
       return
     }
@@ -221,49 +253,10 @@ export default function Home() {
     setStatus({ type: 'info', message: '生成中 Generating PPTX...' })
 
     try {
-      // Convert template file to base64
-      if (!uploadedFile) {
-        throw new Error('Template file is missing')
-      }
+      console.log('Using stored template base64, length:', templateBase64.length)
 
-      console.log('Converting template file:', uploadedFile.name, 'Size:', uploadedFile.size)
-
-      const templateBase64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => {
-          try {
-            const result = reader.result
-            if (!result || typeof result !== 'string') {
-              reject(new Error('FileReader returned invalid result'))
-              return
-            }
-            const base64 = result.split(',')[1] // Remove data:application/...;base64, prefix
-            if (!base64 || base64.length === 0) {
-              reject(new Error('Failed to extract base64 from file'))
-            } else {
-              console.log('Template converted successfully, base64 length:', base64.length)
-              resolve(base64)
-            }
-          } catch (err) {
-            console.error('Error processing file result:', err)
-            reject(err)
-          }
-        }
-        reader.onerror = (error) => {
-          console.error('FileReader error:', error)
-          reject(new Error('Failed to read template file: ' + error))
-        }
-        reader.readAsDataURL(uploadedFile)
-      })
-
-      if (!templateBase64 || templateBase64.length === 0) {
-        throw new Error('Template file conversion failed - empty result')
-      }
-
-      console.log('Sending request with templateBase64 length:', templateBase64.length)
-
-      const requestBody = { preview, metadata, templateBase64 }
-      console.log('Request body keys:', Object.keys(requestBody), 'templateBase64 exists:', !!requestBody.templateBase64)
+      const requestBody = { preview, metadata, templateBase64: templateBase64 }
+      console.log('Request body keys:', Object.keys(requestBody), 'templateBase64 exists:', !!requestBody.templateBase64, 'length:', requestBody.templateBase64?.length)
 
       const response = await fetch('/api/generate-pptx', {
         method: 'POST',
@@ -296,7 +289,7 @@ export default function Home() {
     }
   }
 
-  const handleFileSelect = (file) => {
+  const handleFileSelect = async (file) => {
     if (!file) return
 
     // Validate file type
@@ -306,7 +299,41 @@ export default function Home() {
     }
 
     setUploadedFile(file)
-    setStatus({ type: 'success', message: `✅ 已上传模板: ${file.name} Template uploaded: ${file.name}` })
+    
+    // Convert to base64 immediately and store it
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          try {
+            const result = reader.result
+            if (!result || typeof result !== 'string') {
+              reject(new Error('FileReader returned invalid result'))
+              return
+            }
+            const base64String = result.split(',')[1]
+            if (!base64String || base64String.length === 0) {
+              reject(new Error('Failed to extract base64 from file'))
+            } else {
+              resolve(base64String)
+            }
+          } catch (err) {
+            reject(err)
+          }
+        }
+        reader.onerror = (error) => {
+          reject(new Error('Failed to read template file: ' + error))
+        }
+        reader.readAsDataURL(file)
+      })
+      
+      setTemplateBase64(base64)
+      setStatus({ type: 'success', message: `✅ 已上传模板: ${file.name} Template uploaded: ${file.name}` })
+    } catch (error) {
+      console.error('Error converting template to base64:', error)
+      setStatus({ type: 'error', message: '模板文件转换失败 Template file conversion failed' })
+      setUploadedFile(null)
+    }
   }
 
   const handleFileInputChange = (e) => {
@@ -580,7 +607,7 @@ Credits: 词曲：XXX
             {/* Generate PPTX Button */}
             <button
               onClick={handleGeneratePPTX}
-              disabled={isGenerating || preview.length === 0 || !uploadedFile}
+              disabled={isGenerating || preview.length === 0 || !uploadedFile || !templateBase64}
               className="mt-6 w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isGenerating ? (
