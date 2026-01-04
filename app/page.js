@@ -100,22 +100,71 @@ export default function Home() {
             body: JSON.stringify({ text: line.original }),
           })
 
-          if (!response.ok) {
-            throw new Error('Failed to process line')
+          let data
+          try {
+            data = await response.json()
+          } catch (jsonError) {
+            console.error(`Failed to parse JSON response for line ${i + 1}:`, jsonError)
+            throw new Error('Invalid response from server')
           }
 
-          const data = await response.json()
-          processed.push({
-            ...line,
-            simplified: data.simplified || line.original,
-            pinyin: data.pinyin || '',
-          })
+          if (!response.ok) {
+            // Even if response is not ok, check if we have fallback data
+            if (data.simplified && data.simplified !== line.original) {
+              // Use the fallback data if available
+              processed.push({
+                ...line,
+                simplified: data.simplified,
+                pinyin: data.pinyin || '',
+              })
+              const currentProgress = Math.round(((i + 1) / totalLines) * 100)
+              setProgress(currentProgress)
+              continue
+            }
+            throw new Error(data.error || `API returned status ${response.status}`)
+          }
+          
+          // Validate that we got actual processed data
+          if (data.error) {
+            console.warn(`API returned error for line ${i + 1}:`, data.error)
+            // If API returns error but has fallback data, use it
+            if (data.simplified && data.simplified !== line.original) {
+              processed.push({
+                ...line,
+                simplified: data.simplified,
+                pinyin: data.pinyin || '',
+              })
+            } else {
+              // No valid data, mark as failed
+              throw new Error(data.error || 'No processed data returned')
+            }
+          } else {
+            // Check if we got meaningful results
+            const hasSimplified = data.simplified && data.simplified.trim() && data.simplified !== line.original
+            const hasPinyin = data.pinyin && data.pinyin.trim()
+            
+            if (!hasSimplified && !hasPinyin) {
+              console.warn(`Line ${i + 1} returned empty results, using original text`)
+              processed.push({
+                ...line,
+                simplified: line.original,
+                pinyin: '',
+              })
+            } else {
+              processed.push({
+                ...line,
+                simplified: data.simplified || line.original,
+                pinyin: data.pinyin || '',
+              })
+            }
+          }
 
           // Update progress
           const currentProgress = Math.round(((i + 1) / totalLines) * 100)
           setProgress(currentProgress)
         } catch (error) {
-          console.error(`Error processing line ${i + 1}:`, error)
+          console.error(`Error processing line ${i + 1} (${line.original}):`, error)
+          // On error, keep original text but mark pinyin as empty
           processed.push({
             ...line,
             simplified: line.original,
@@ -124,14 +173,24 @@ export default function Home() {
         }
       }
 
-      // Combine sections and processed lyrics
+      // Combine sections and processed lyrics (but don't include section markers in preview)
       const finalPreview = []
       let processedIndex = 0
+      let currentSectionForDisplay = ''
+      
       for (const item of parsed) {
         if (item.type === 'section') {
-          finalPreview.push(item)
+          // Store section for next lyrics, but don't add to preview
+          currentSectionForDisplay = item.section
         } else {
-          finalPreview.push(processed[processedIndex])
+          // Add processed lyric with current section
+          const processedLine = processed[processedIndex]
+          if (processedLine) {
+            finalPreview.push({
+              ...processedLine,
+              section: currentSectionForDisplay
+            })
+          }
           processedIndex++
         }
       }
@@ -163,33 +222,53 @@ export default function Home() {
 
     try {
       // Convert template file to base64
+      if (!uploadedFile) {
+        throw new Error('Template file is missing')
+      }
+
+      console.log('Converting template file:', uploadedFile.name, 'Size:', uploadedFile.size)
+
       const templateBase64 = await new Promise((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => {
           try {
-            const base64 = reader.result.split(',')[1] // Remove data:application/...;base64, prefix
-            if (!base64) {
-              reject(new Error('Failed to convert file to base64'))
+            const result = reader.result
+            if (!result || typeof result !== 'string') {
+              reject(new Error('FileReader returned invalid result'))
+              return
+            }
+            const base64 = result.split(',')[1] // Remove data:application/...;base64, prefix
+            if (!base64 || base64.length === 0) {
+              reject(new Error('Failed to extract base64 from file'))
             } else {
+              console.log('Template converted successfully, base64 length:', base64.length)
               resolve(base64)
             }
           } catch (err) {
+            console.error('Error processing file result:', err)
             reject(err)
           }
         }
         reader.onerror = (error) => {
           console.error('FileReader error:', error)
-          reject(new Error('Failed to read template file'))
+          reject(new Error('Failed to read template file: ' + error))
         }
         reader.readAsDataURL(uploadedFile)
       })
 
-      console.log('Template base64 length:', templateBase64?.length)
+      if (!templateBase64 || templateBase64.length === 0) {
+        throw new Error('Template file conversion failed - empty result')
+      }
+
+      console.log('Sending request with templateBase64 length:', templateBase64.length)
+
+      const requestBody = { preview, metadata, templateBase64 }
+      console.log('Request body keys:', Object.keys(requestBody), 'templateBase64 exists:', !!requestBody.templateBase64)
 
       const response = await fetch('/api/generate-pptx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preview, metadata, templateBase64 }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -462,27 +541,35 @@ Credits: 词曲：XXX
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.map((item, index) => (
-                    <tr
-                      key={index}
-                      className={`hover:bg-purple-50/50 transition-colors ${
-                        item.type === 'section' ? 'bg-gray-100/50 font-semibold' : ''
-                      }`}
-                    >
-                      <td className="border border-gray-200 px-4 py-3">
-                        {item.section || '-'}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-3">
-                        {item.original}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-3">
-                        {item.simplified || '-'}
-                      </td>
-                      <td className="border border-gray-200 px-4 py-3">
-                        {item.pinyin || '-'}
-                      </td>
-                    </tr>
-                  ))}
+                  {preview
+                    .filter(item => item.type === 'lyric') // Only show lyric lines, not section markers
+                    .map((item, index) => {
+                      const isUnprocessed = !item.pinyin && item.simplified === item.original
+                      return (
+                        <tr
+                          key={index}
+                          className={`hover:bg-purple-50/50 transition-colors ${
+                            isUnprocessed ? 'bg-yellow-50/50' : ''
+                          }`}
+                        >
+                          <td className="border border-gray-200 px-4 py-3">
+                            {item.section || '-'}
+                          </td>
+                          <td className="border border-gray-200 px-4 py-3">
+                            {item.original}
+                          </td>
+                          <td className={`border border-gray-200 px-4 py-3 ${isUnprocessed ? 'text-yellow-700' : ''}`}>
+                            {item.simplified || '-'}
+                            {isUnprocessed && item.simplified === item.original && (
+                              <span className="text-xs text-yellow-600 ml-2">(未处理)</span>
+                            )}
+                          </td>
+                          <td className={`border border-gray-200 px-4 py-3 ${isUnprocessed ? 'text-yellow-700' : ''}`}>
+                            {item.pinyin || (isUnprocessed ? <span className="text-xs text-yellow-600">(未处理)</span> : '-')}
+                          </td>
+                        </tr>
+                      )
+                    })}
                 </tbody>
               </table>
             </div>
