@@ -153,23 +153,38 @@ export default function Home() {
       return
     }
 
+    if (!uploadedFile) {
+      setStatus({ type: 'error', message: '请先上传模板文件 Please upload a template file first' })
+      return
+    }
+
     setIsGenerating(true)
     setStatus({ type: 'info', message: '生成中 Generating PPTX...' })
 
     try {
-      // Convert template file to base64 if uploaded
-      let templateBase64 = null
-      if (uploadedFile) {
-        templateBase64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => {
+      // Convert template file to base64
+      const templateBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          try {
             const base64 = reader.result.split(',')[1] // Remove data:application/...;base64, prefix
-            resolve(base64)
+            if (!base64) {
+              reject(new Error('Failed to convert file to base64'))
+            } else {
+              resolve(base64)
+            }
+          } catch (err) {
+            reject(err)
           }
-          reader.onerror = reject
-          reader.readAsDataURL(uploadedFile)
-        })
-      }
+        }
+        reader.onerror = (error) => {
+          console.error('FileReader error:', error)
+          reject(new Error('Failed to read template file'))
+        }
+        reader.readAsDataURL(uploadedFile)
+      })
+
+      console.log('Template base64 length:', templateBase64?.length)
 
       const response = await fetch('/api/generate-pptx', {
         method: 'POST',
@@ -475,7 +490,7 @@ Credits: 词曲：XXX
             {/* Generate PPTX Button */}
             <button
               onClick={handleGeneratePPTX}
-              disabled={isGenerating || preview.length === 0}
+              disabled={isGenerating || preview.length === 0 || !uploadedFile}
               className="mt-6 w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isGenerating ? (
