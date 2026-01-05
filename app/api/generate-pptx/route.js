@@ -53,18 +53,43 @@ export async function POST(request) {
       )
     }
 
-    // Group lyrics into pairs (2 lines per slide) - ENSURE ALL LINES ARE INCLUDED
+    // Group lyrics into pairs (2 lines per slide) - BUT ONLY WITHIN THE SAME SECTION
+    // Do NOT combine lines from different sections
     const lyricPairs = []
-    for (let i = 0; i < lyricLines.length; i += 2) {
-      lyricPairs.push({
-        line1: lyricLines[i],
-        line2: lyricLines[i + 1] || null, // null if odd number of lines
-      })
+    let i = 0
+    
+    while (i < lyricLines.length) {
+      const currentLine = lyricLines[i]
+      const currentSection = currentLine?.section || ''
+      
+      // Find all consecutive lines in the same section
+      const sectionLines = []
+      let j = i
+      while (j < lyricLines.length) {
+        const lineSection = lyricLines[j]?.section || ''
+        if (lineSection === currentSection) {
+          sectionLines.push(lyricLines[j])
+          j++
+        } else {
+          break // Different section, stop grouping
+        }
+      }
+      
+      // Pair lines within this section (2 lines per slide)
+      for (let k = 0; k < sectionLines.length; k += 2) {
+        lyricPairs.push({
+          line1: sectionLines[k],
+          line2: sectionLines[k + 1] || null, // null if odd number of lines in section
+        })
+      }
+      
+      // Move to next section
+      i = j
     }
-    console.log(`Created ${lyricPairs.length} lyric pairs from ${lyricLines.length} lines`)
+    
+    console.log(`Created ${lyricPairs.length} lyric pairs from ${lyricLines.length} lines (grouped by section)`)
 
     // Track sections to only show section name on first slide of each section
-    let currentSection = ''
     let previousSection = ''
     const slidesWithSections = lyricPairs.map((pair, index) => {
       const section = pair.line1?.section ? pair.line1.section.replace(/^\[|\]$/g, '') : ''
