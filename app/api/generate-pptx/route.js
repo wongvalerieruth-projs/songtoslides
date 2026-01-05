@@ -17,6 +17,7 @@ export async function POST(request) {
     }
 
     const lyricLines = preview.filter(item => item.type === 'lyric')
+    console.log(`Total lyric lines to process: ${lyricLines.length}`)
 
     if (!templateBase64) {
       return NextResponse.json(
@@ -52,40 +53,45 @@ export async function POST(request) {
       )
     }
 
-    // Group lyrics into pairs (2 lines per slide)
+    // Group lyrics into pairs (2 lines per slide) - ENSURE ALL LINES ARE INCLUDED
     const lyricPairs = []
     for (let i = 0; i < lyricLines.length; i += 2) {
       lyricPairs.push({
         line1: lyricLines[i],
-        line2: lyricLines[i + 1] || null,
+        line2: lyricLines[i + 1] || null, // null if odd number of lines
       })
     }
+    console.log(`Created ${lyricPairs.length} lyric pairs from ${lyricLines.length} lines`)
+
+    // Track sections to only show section name on first slide of each section
+    let currentSection = ''
+    let previousSection = ''
+    const slidesWithSections = lyricPairs.map((pair, index) => {
+      const section = pair.line1?.section ? pair.line1.section.replace(/^\[|\]$/g, '') : ''
+      const isNewSection = section && section !== previousSection
+      previousSection = section
+      return {
+        pair,
+        section: isNewSection ? section : '', // Only show section if it's new
+        isNewSection
+      }
+    })
 
     // Identify template slides
-    // First slide is title slide (if metadata exists), second slide is lyrics template
-    // If no metadata, first slide is lyrics template
     const hasTitleSlide = metadata && (metadata.title || metadata.credits)
     const titleSlideKey = hasTitleSlide ? slideKeys[0] : null
-    
-    // Find the lyrics template slide
-    // If we have a title slide, use slide2 (index 1), otherwise use slide1 (index 0)
-    // But if template only has 1 slide and we need a title slide, we need to handle that
     let lyricTemplateKey = null
+    
     if (hasTitleSlide) {
-      // If we have metadata, slide1 is title, so slide2 should be lyrics template
       if (slideKeys.length > 1) {
-        lyricTemplateKey = slideKeys[1] // Use slide2
+        lyricTemplateKey = slideKeys[1]
       } else {
-        // Template only has 1 slide, but we need both title and lyrics
-        // In this case, we'll use slide1 as lyrics template and create title separately
-        // Actually, this shouldn't happen - template should have at least 2 slides
         return NextResponse.json(
           { error: 'Template file needs at least 2 slides: one for title and one for lyrics.' },
           { status: 400 }
         )
       }
     } else {
-      // No title slide needed, use slide1 as lyrics template
       lyricTemplateKey = slideKeys[0]
     }
 
@@ -96,23 +102,17 @@ export async function POST(request) {
       )
     }
 
-    console.log(`Template identification: hasTitleSlide=${hasTitleSlide}, titleSlideKey=${titleSlideKey}, lyricTemplateKey=${lyricTemplateKey}, totalSlidesInTemplate=${slideKeys.length}`)
+    console.log(`Template: hasTitleSlide=${hasTitleSlide}, lyricTemplateKey=${lyricTemplateKey}`)
 
     // Load the lyrics template slide
     const lyricTemplateXml = await zip.files[lyricTemplateKey].async('string')
     const lyricTemplateParsed = await xml2js.parseStringPromise(lyricTemplateXml)
     
-    // Verify this is actually a lyrics slide (has placeholders like {pinyin1} or {chinese1})
-    const templateXmlString = JSON.stringify(lyricTemplateParsed)
-    const hasLyricPlaceholders = templateXmlString.includes('{pinyin1}') || 
-                                  templateXmlString.includes('{chinese1}') || 
-                                  templateXmlString.includes('{pinyin2}') || 
-                                  templateXmlString.includes('{chinese2}')
-    
-    console.log(`Using ${lyricTemplateKey} as lyrics template. Has placeholders: ${hasLyricPlaceholders}`)
-    
-    if (!hasLyricPlaceholders) {
-      console.warn(`Warning: Slide ${lyricTemplateKey} doesn't appear to have lyric placeholders. The generated slides may be blank.`)
+    // Also load the .rels file for the template slide
+    const templateRelKey = `ppt/slides/_rels/${lyricTemplateKey.split('/').pop()}.rels`
+    let templateRelXml = null
+    if (zip.files[templateRelKey]) {
+      templateRelXml = await zip.files[templateRelKey].async('string')
     }
 
     // Function to replace placeholders in XML
@@ -254,16 +254,16 @@ export async function POST(request) {
 
     // Check if the lyrics template slide already exists in the template
     // If it does, update it with the first lyric pair, then create new slides for the rest
-    // If it doesn't exist, create all slides as new
     const lyricTemplateSlideNum = lyricTemplateKey.match(/slide(\d+)/)?.[1]
     const lyricTemplateExists = lyricTemplateSlideNum && slideKeys.includes(lyricTemplateKey)
     
     let firstPairIndex = 0
     
     // If the lyrics template slide exists, update it with the first lyric pair
-    if (lyricTemplateExists && lyricPairs.length > 0) {
-      const firstPair = lyricPairs[0]
-      const sectionName = firstPair.line1?.section ? firstPair.line1.section.replace(/^\[|\]$/g, '') : ''
+    if (lyricTemplateExists && slidesWithSections.length > 0) {
+      const firstSlideData = slidesWithSections[0]
+      const firstPair = firstSlideData.pair
+      const sectionName = firstSlideData.section // This will be empty if not a new section
       
       // Deep copy the template
       const updatedLyricSlide = JSON.parse(JSON.stringify(lyricTemplateParsed))
@@ -276,21 +276,23 @@ export async function POST(request) {
       zip.file(lyricTemplateKey, updatedXml)
       
       firstPairIndex = 1 // Start creating new slides from the second pair
+      console.log(`Updated existing slide ${lyricTemplateKey} with first pair`)
     }
 
-    // Create new slides for remaining lyric pairs
+    // Create new slides for remaining lyric pairs - ENSURE ALL PAIRS ARE INCLUDED
     const newSlideKeys = []
-    for (let i = firstPairIndex; i < lyricPairs.length; i++) {
-      const pair = lyricPairs[i]
-      const sectionName = pair.line1?.section ? pair.line1.section.replace(/^\[|\]$/g, '') : ''
+    for (let i = firstPairIndex; i < slidesWithSections.length; i++) {
+      const slideData = slidesWithSections[i]
+      const pair = slideData.pair
+      const sectionName = slideData.section // Only set if it's a new section
       
-      // Deep copy the template (always use the original parsed template, not the updated one)
+      // Deep copy the template (always use the original parsed template)
       const newSlideParsed = JSON.parse(JSON.stringify(lyricTemplateParsed))
       
       // Replace placeholders
       replaceTextInElement(newSlideParsed, pair, sectionName)
       
-      // Create new slide number (i starts from firstPairIndex, so subtract it to get 0-based index for new slides)
+      // Create new slide number
       const newSlideIndex = i - firstPairIndex
       const newSlideNum = maxSlideNum + newSlideIndex + 1
       const newSlideKey = `ppt/slides/slide${newSlideNum}.xml`
@@ -300,20 +302,17 @@ export async function POST(request) {
       const newSlideXml = builder.buildObject(newSlideParsed)
       zip.file(newSlideKey, newSlideXml)
       
-      // Copy the .rels file for the slide
-      const templateRelKey = lyricTemplateKey.replace('.xml', '.xml.rels')
-      const templateRelKey2 = `ppt/slides/_rels/${lyricTemplateKey.split('/').pop()}.rels`
-      const relKeys = [templateRelKey, templateRelKey2]
-      
-      for (const relKey of relKeys) {
-        if (zip.files[relKey]) {
-          const relXml = await zip.files[relKey].async('string')
-          const newRelKey = `ppt/slides/_rels/slide${newSlideNum}.xml.rels`
-          zip.file(newRelKey, relXml)
-          break
-        }
+      // Copy the .rels file for the slide (CRITICAL for file integrity)
+      if (templateRelXml) {
+        const newRelKey = `ppt/slides/_rels/slide${newSlideNum}.xml.rels`
+        zip.file(newRelKey, templateRelXml)
+        console.log(`Created slide ${newSlideNum} with .rels file`)
+      } else {
+        console.warn(`Warning: No template .rels file found for slide ${newSlideNum}`)
       }
     }
+
+    console.log(`Created ${newSlideKeys.length} new slides (total pairs: ${lyricPairs.length}, firstPairIndex: ${firstPairIndex})`)
 
     // Update presentation.xml to include new slides
     const presentationXmlKey = 'ppt/presentation.xml'
@@ -329,7 +328,7 @@ export async function POST(request) {
     })
 
     // Add new slide IDs (only for newly created slides, not the existing slide2)
-    const numNewSlides = lyricPairs.length - firstPairIndex
+    const numNewSlides = slidesWithSections.length - firstPairIndex
     for (let i = 0; i < numNewSlides; i++) {
       const newId = maxId + i + 1
       const newRId = `rId${newId}`
@@ -355,10 +354,9 @@ export async function POST(request) {
     }
 
     const relationships = presentationRelsParsed.Relationships.Relationship
-    // Ensure relationships is an array
     const relationshipsArray = Array.isArray(relationships) ? relationships : [relationships].filter(Boolean)
     
-    // Find max relationship ID more carefully
+    // Find max relationship ID
     let maxRId = 0
     relationshipsArray.forEach(rel => {
       if (rel && rel.$ && rel.$.Id) {
@@ -371,12 +369,12 @@ export async function POST(request) {
     })
 
     // Add new relationships (only for newly created slides)
-    // Make sure rId matches the one used in presentation.xml (rId${newId})
+    // Make sure rId matches the one used in presentation.xml
     for (let i = 0; i < numNewSlides; i++) {
       const newId = maxId + i + 1  // Match the ID used in presentation.xml
       const newRId = `rId${newId}`  // Match the rId used in presentation.xml
-      // Calculate slide number to match what we created earlier
-      const newSlideNum = maxSlideNum + i + 1
+      const newSlideIndex = i
+      const newSlideNum = maxSlideNum + newSlideIndex + 1
       relationshipsArray.push({
         '$': {
           Id: newRId,
@@ -409,7 +407,8 @@ export async function POST(request) {
       
       // Add content type entries for new slides
       for (let i = 0; i < numNewSlides; i++) {
-        const newSlideNum = maxSlideNum + i + 1
+        const newSlideIndex = i
+        const newSlideNum = maxSlideNum + newSlideIndex + 1
         overrides.push({
           '$': {
             PartName: `/ppt/slides/slide${newSlideNum}.xml`,
@@ -426,8 +425,9 @@ export async function POST(request) {
     zip.file(presentationXmlKey, builder.buildObject(presentationParsed))
     zip.file(presentationRelsKey, builder.buildObject(presentationRelsParsed))
 
-    // Calculate total slides
+    // Calculate total slides - VERIFY ALL LINES ARE INCLUDED
     const totalSlides = (hasTitleSlide ? 1 : 0) + lyricPairs.length
+    console.log(`Total slides: ${totalSlides} (title: ${hasTitleSlide ? 1 : 0}, lyrics: ${lyricPairs.length} pairs from ${lyricLines.length} lines)`)
 
     // Generate the PPTX buffer
     const buffer = await zip.generateAsync({ type: 'nodebuffer' })
