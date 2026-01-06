@@ -136,8 +136,14 @@ export async function POST(request) {
     // Also load the .rels file for the template slide
     const templateRelKey = `ppt/slides/_rels/${lyricTemplateKey.split('/').pop()}.rels`
     let templateRelXml = null
+    let templateRelParsed = null
     if (zip.files[templateRelKey]) {
       templateRelXml = await zip.files[templateRelKey].async('string')
+      try {
+        templateRelParsed = await xml2js.parseStringPromise(templateRelXml)
+      } catch (e) {
+        console.warn('Failed to parse template .rels file:', e)
+      }
     }
 
     // Function to replace placeholders in XML
@@ -271,10 +277,11 @@ export async function POST(request) {
       return match ? parseInt(match[1]) : 0
     }))
 
-    // Builder for XML conversion
+    // Builder for XML conversion - ensure proper XML structure
     const builder = new xml2js.Builder({
       xmldec: { version: '1.0', encoding: 'UTF-8', standalone: true },
-      renderOpts: { pretty: false }
+      renderOpts: { pretty: false },
+      headless: false
     })
 
     // Check if the lyrics template slide already exists in the template
@@ -327,13 +334,26 @@ export async function POST(request) {
       const newSlideXml = builder.buildObject(newSlideParsed)
       zip.file(newSlideKey, newSlideXml)
       
-      // Copy the .rels file for the slide (CRITICAL for file integrity)
-      if (templateRelXml) {
-        const newRelKey = `ppt/slides/_rels/slide${newSlideNum}.xml.rels`
+      // Create the .rels file for the slide (CRITICAL for file integrity)
+      const newRelKey = `ppt/slides/_rels/slide${newSlideNum}.xml.rels`
+      if (templateRelParsed) {
+        // Deep copy the parsed .rels file
+        const newRelParsed = JSON.parse(JSON.stringify(templateRelParsed))
+        // Convert back to XML
+        const newRelXml = builder.buildObject(newRelParsed)
+        zip.file(newRelKey, newRelXml)
+        console.log(`Created slide ${newSlideNum} with .rels file (parsed and rebuilt)`)
+      } else if (templateRelXml) {
+        // Fallback: use raw XML if parsing failed
         zip.file(newRelKey, templateRelXml)
-        console.log(`Created slide ${newSlideNum} with .rels file`)
+        console.log(`Created slide ${newSlideNum} with .rels file (raw copy)`)
       } else {
-        console.warn(`Warning: No template .rels file found for slide ${newSlideNum}`)
+        // Create a minimal .rels file if template doesn't have one
+        const minimalRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>`
+        zip.file(newRelKey, minimalRels)
+        console.warn(`Warning: Created minimal .rels file for slide ${newSlideNum} (template had none)`)
       }
     }
 
@@ -357,12 +377,22 @@ export async function POST(request) {
     for (let i = 0; i < numNewSlides; i++) {
       const newId = maxId + i + 1
       const newRId = `rId${newId}`
+      
+      // Verify this slide ID doesn't already exist
+      const existingSldId = sldIdLst.find(sldId => sldId.$?.id === String(newId))
+      if (existingSldId) {
+        console.warn(`Warning: Slide ID ${newId} already exists, skipping`)
+        continue
+      }
+      
       sldIdLst.push({
         '$': {
           id: String(newId),
           'r:id': newRId
         }
       })
+      
+      console.log(`Added slide ID: ${newId} with rId: ${newRId}`)
     }
 
     // Update presentation.xml.rels
@@ -400,6 +430,14 @@ export async function POST(request) {
       const newRId = `rId${newId}`  // Match the rId used in presentation.xml
       const newSlideIndex = i
       const newSlideNum = maxSlideNum + newSlideIndex + 1
+      
+      // Verify this relationship doesn't already exist
+      const existingRel = relationshipsArray.find(rel => rel.$?.Id === newRId)
+      if (existingRel) {
+        console.warn(`Warning: Relationship ${newRId} already exists, skipping`)
+        continue
+      }
+      
       relationshipsArray.push({
         '$': {
           Id: newRId,
@@ -407,6 +445,8 @@ export async function POST(request) {
           Target: `slides/slide${newSlideNum}.xml`
         }
       })
+      
+      console.log(`Added relationship: ${newRId} -> slides/slide${newSlideNum}.xml`)
     }
 
     // Update the relationships array
