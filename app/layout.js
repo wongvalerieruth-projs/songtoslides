@@ -1,4 +1,17 @@
 import './globals.css'
+import { Playfair_Display, Lora } from 'next/font/google'
+
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  variable: '--font-playfair',
+  display: 'swap',
+})
+
+const lora = Lora({
+  subsets: ['latin'],
+  variable: '--font-lora',
+  display: 'swap',
+})
 
 export const metadata = {
   title: 'Song to Slides',
@@ -11,7 +24,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" className={`${playfair.variable} ${lora.variable}`}>
       <body>{children}</body>
     </html>
   )
