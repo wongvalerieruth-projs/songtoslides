@@ -472,32 +472,40 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-stone-50 to-neutral-50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen liquid-bg py-12 px-4 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl floating" style={{ animationDelay: '0s' }}></div>
+        <div className="absolute top-40 right-20 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl floating" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-pink-400/20 rounded-full blur-3xl floating" style={{ animationDelay: '4s' }}></div>
+        <div className="absolute bottom-40 right-1/4 w-64 h-64 bg-cyan-400/20 rounded-full blur-3xl floating" style={{ animationDelay: '1s' }}></div>
+      </div>
+      
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
         <div className="mb-12 text-center">
-          <h1 className="text-6xl font-serif font-bold text-slate-900 mb-4 tracking-tight">
+          <h1 className="text-6xl font-serif font-bold text-gradient mb-4 tracking-tight floating">
             Song to Slides
           </h1>
-          <p className="text-lg font-serif-body text-slate-600 max-w-2xl mx-auto">
+          <p className="text-lg font-serif-body text-white/90 max-w-2xl mx-auto drop-shadow-lg">
             Generate Chinese worship lyrics slides with Pinyin
           </p>
         </div>
 
         {/* Status Message */}
         {status.type && (
-          <div className={`mb-6 p-4 rounded-lg backdrop-blur-sm border ${
+          <div className={`mb-6 p-4 rounded-xl glass-card ${
             status.type === 'success' 
-              ? 'bg-green-50/90 border-green-300' 
+              ? 'border-green-400/50' 
               : status.type === 'error'
-              ? 'bg-red-50/90 border-red-300'
-              : 'bg-slate-50/90 border-slate-300'
+              ? 'border-red-400/50'
+              : 'border-blue-400/50'
           }`}>
             <div className="flex items-center gap-2 font-serif-body">
-              {status.type === 'success' && <CheckCircle className="w-5 h-5 text-green-700" />}
-              {status.type === 'error' && <AlertCircle className="w-5 h-5 text-red-700" />}
-              {status.type === 'info' && <Loader2 className="w-5 h-5 text-slate-700 animate-spin" />}
-              <p className={status.type === 'success' ? 'text-green-800' : status.type === 'error' ? 'text-red-800' : 'text-slate-800'}>
+              {status.type === 'success' && <CheckCircle className="w-5 h-5 text-green-300 drop-shadow-lg" />}
+              {status.type === 'error' && <AlertCircle className="w-5 h-5 text-red-300 drop-shadow-lg" />}
+              {status.type === 'info' && <Loader2 className="w-5 h-5 text-blue-300 animate-spin drop-shadow-lg" />}
+              <p className={status.type === 'success' ? 'text-green-100' : status.type === 'error' ? 'text-red-100' : 'text-blue-100'}>
                 {status.message}
               </p>
             </div>
@@ -508,12 +516,12 @@ export default function Home() {
         {isProcessing && (
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">处理中 Processing...</span>
-              <span className="text-sm font-medium text-gray-700">{progress}%</span>
+              <span className="text-sm font-medium text-white/90 drop-shadow-lg">处理中 Processing...</span>
+              <span className="text-sm font-medium text-white/90 drop-shadow-lg">{progress}%</span>
             </div>
-            <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+            <div className="w-full h-3 glass-card rounded-full overflow-hidden">
               <div 
-                className="h-full bg-slate-900 transition-all duration-300"
+                className="h-full glass-button transition-all duration-300 rounded-full"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -523,11 +531,11 @@ export default function Home() {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Template Upload */}
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-200 p-6">
-            <h2 className="text-xl font-serif font-bold mb-2 text-slate-900">
+          <div className="glass-card glass-card-hover rounded-2xl p-6">
+            <h2 className="text-xl font-serif font-bold mb-2 text-white drop-shadow-lg">
               上传模板 | Upload Template
             </h2>
-            <p className="text-sm text-slate-600 mb-4 font-serif-body">
+            <p className="text-sm text-white/80 mb-4 font-serif-body">
               模板 Template
             </p>
             <input
@@ -542,63 +550,63 @@ export default function Home() {
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer glass-card ${
                 isDragging
-                  ? 'border-slate-400 bg-slate-50'
+                  ? 'border-blue-400/60 bg-blue-500/20 scale-105'
                   : uploadedFile
-                  ? 'border-green-400 bg-green-50/50'
-                  : 'border-slate-300 hover:border-slate-400'
+                  ? 'border-green-400/60 bg-green-500/20'
+                  : 'border-white/30 hover:border-white/50 hover:bg-white/5'
               }`}
             >
               {uploadedFile ? (
                 <>
-                  <File className="w-12 h-12 mx-auto text-green-600 mb-4" />
-                  <p className="text-sm font-serif font-medium text-green-800 mb-2">
+                  <File className="w-12 h-12 mx-auto text-green-300 mb-4 drop-shadow-lg" />
+                  <p className="text-sm font-serif font-medium text-green-100 mb-2 drop-shadow-lg">
                     {uploadedFile.name}
                   </p>
-                  <p className="text-xs text-green-700 font-serif-body">
+                  <p className="text-xs text-green-200/80 font-serif-body">
                     点击重新上传 | Click to upload different file
                   </p>
                 </>
               ) : (
                 <>
-                  <Upload className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                  <p className="text-sm text-slate-600 mb-2 font-serif-body">
+                  <Upload className="w-12 h-12 mx-auto text-white/60 mb-4 drop-shadow-lg" />
+                  <p className="text-sm text-white/90 mb-2 font-serif-body drop-shadow-lg">
                     拖放 .pptx 文件或点击上传
                   </p>
-                  <p className="text-xs text-slate-500 font-serif-body">
+                  <p className="text-xs text-white/70 font-serif-body">
                     Drag & drop .pptx file or click to upload
                   </p>
                 </>
               )}
-              <p className="text-xs text-slate-600 mt-4 font-serif-body">
+              <p className="text-xs text-white/80 mt-4 font-serif-body">
                 <a 
                   href="https://docs.google.com/presentation/d/1QZNR-MGA6bstis0KJiGB3xNHdF-CG9gOJSPgqAHCPKo/edit?usp=sharing" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="underline hover:text-slate-900 font-semibold"
+                  className="underline hover:text-white font-semibold transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
                   查看示例模板 | View Sample Template
                 </a>
               </p>
             </div>
-            <p className="text-xs text-slate-600 mt-4 font-serif-body">
-              <strong className="text-slate-900">模板占位符 | Template Placeholders:</strong><br />
+            <p className="text-xs text-white/80 mt-4 font-serif-body">
+              <strong className="text-white">模板占位符 | Template Placeholders:</strong><br />
               {'{pinyin1}'}, {'{chinese1}'}, {'{pinyin2}'}, {'{chinese2}'}, {'{section}'}<br />
               {'{title}'}, {'{credits}'} (for title slide)
             </p>
-            <p className="text-xs text-green-700 mt-2 font-serif-body font-medium">
+            <p className="text-xs text-green-300 mt-2 font-serif-body font-medium drop-shadow-lg">
               ✓ 模板支持已启用 | Template support is active
             </p>
           </div>
 
           {/* Lyrics Input */}
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-200 p-6">
-            <h2 className="text-xl font-serif font-bold mb-2 text-slate-900">
+          <div className="glass-card glass-card-hover rounded-2xl p-6">
+            <h2 className="text-xl font-serif font-bold mb-2 text-white drop-shadow-lg">
               输入歌词 | Enter Lyrics
             </h2>
-            <p className="text-sm text-slate-600 mb-4 font-serif-body">
+            <p className="text-sm text-white/80 mb-4 font-serif-body">
               粘贴歌词文本 | Paste lyrics text
             </p>
             <textarea
@@ -612,13 +620,13 @@ Credits: 词曲：XXX
 [Chorus]
 我要赞美祢
 永远荣耀祢`}
-              className="w-full h-64 p-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent resize-none text-sm font-serif-body"
+              className="w-full h-64 p-4 glass-input rounded-xl resize-none text-sm font-serif-body text-white placeholder:text-white/50"
               disabled={isProcessing}
             />
             <button
               onClick={handleProcess}
               disabled={isProcessing || !lyricsText.trim()}
-              className="mt-4 w-full bg-slate-900 text-white font-serif font-semibold py-3 px-6 rounded-lg shadow-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="mt-4 w-full glass-button text-white font-serif font-semibold py-3 px-6 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isProcessing ? (
                 <>
@@ -634,12 +642,12 @@ Credits: 词曲：XXX
             {isProcessing && (
               <div className="mt-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-700">处理中 Processing...</span>
-                  <span className="text-sm font-medium text-gray-700">{progress}%</span>
+                  <span className="text-sm font-medium text-white/90 drop-shadow-lg">处理中 Processing...</span>
+                  <span className="text-sm font-medium text-white/90 drop-shadow-lg">{progress}%</span>
                 </div>
-                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div className="w-full h-3 glass-card rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+                    className="h-full glass-button transition-all duration-300 rounded-full"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -650,16 +658,16 @@ Credits: 词曲：XXX
 
         {/* Metadata Display */}
         {(metadata.title || metadata.credits) && (
-          <div className="mb-6 bg-slate-50 backdrop-blur-sm rounded-lg shadow-sm border border-slate-200 p-5">
-            <h3 className="text-lg font-serif font-bold mb-3 text-slate-900">元数据 | Metadata</h3>
+          <div className="mb-6 glass-card glass-card-hover rounded-2xl p-5">
+            <h3 className="text-lg font-serif font-bold mb-3 text-white drop-shadow-lg">元数据 | Metadata</h3>
             {metadata.title && (
-              <p className="text-slate-700 mb-2 font-serif-body">
-                <span className="font-semibold text-slate-900">标题 | Title:</span> {metadata.title}
+              <p className="text-white/90 mb-2 font-serif-body">
+                <span className="font-semibold text-white">标题 | Title:</span> {metadata.title}
               </p>
             )}
             {metadata.credits && (
-              <p className="text-slate-700 font-serif-body">
-                <span className="font-semibold text-slate-900">制作人 | Credits:</span> {metadata.credits}
+              <p className="text-white/90 font-serif-body">
+                <span className="font-semibold text-white">制作人 | Credits:</span> {metadata.credits}
               </p>
             )}
           </div>
@@ -667,18 +675,18 @@ Credits: 词曲：XXX
 
         {/* Preview Table */}
         {preview.length > 0 && (
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
-            <h2 className="text-xl font-serif font-bold mb-4 text-slate-900">
+          <div className="glass-card glass-card-hover rounded-2xl p-6 mb-6">
+            <h2 className="text-xl font-serif font-bold mb-4 text-white drop-shadow-lg">
               预览 | Preview
             </h2>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-xl">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="bg-slate-900 text-white">
-                    <th className="border border-slate-700 px-4 py-3 text-left font-serif font-semibold">Section</th>
-                    <th className="border border-slate-700 px-4 py-3 text-left font-serif font-semibold">Original</th>
-                    <th className="border border-slate-700 px-4 py-3 text-left font-serif font-semibold">Simplified</th>
-                    <th className="border border-slate-700 px-4 py-3 text-left font-serif font-semibold">Pinyin</th>
+                  <tr className="glass-button">
+                    <th className="border border-white/20 px-4 py-3 text-left font-serif font-semibold text-white">Section</th>
+                    <th className="border border-white/20 px-4 py-3 text-left font-serif font-semibold text-white">Original</th>
+                    <th className="border border-white/20 px-4 py-3 text-left font-serif font-semibold text-white">Simplified</th>
+                    <th className="border border-white/20 px-4 py-3 text-left font-serif font-semibold text-white">Pinyin</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -689,24 +697,24 @@ Credits: 词曲：XXX
                       return (
                         <tr
                           key={index}
-                          className={`hover:bg-slate-50 transition-colors font-serif-body ${
-                            isUnprocessed ? 'bg-yellow-50/50' : ''
+                          className={`hover:bg-white/10 transition-colors font-serif-body ${
+                            isUnprocessed ? 'bg-yellow-500/20' : ''
                           }`}
                         >
-                          <td className="border border-slate-200 px-4 py-3 text-slate-700">
+                          <td className="border border-white/10 px-4 py-3 text-white/90">
                             {item.section || '-'}
                           </td>
-                          <td className="border border-slate-200 px-4 py-3 text-slate-800">
+                          <td className="border border-white/10 px-4 py-3 text-white">
                             {item.original}
                           </td>
-                          <td className={`border border-slate-200 px-4 py-3 ${isUnprocessed ? 'text-yellow-700' : 'text-slate-700'}`}>
+                          <td className={`border border-white/10 px-4 py-3 ${isUnprocessed ? 'text-yellow-200' : 'text-white/90'}`}>
                             {item.simplified || '-'}
                             {isUnprocessed && item.simplified === item.original && (
-                              <span className="text-xs text-yellow-600 ml-2">(未处理)</span>
+                              <span className="text-xs text-yellow-300 ml-2">(未处理)</span>
                             )}
                           </td>
-                          <td className={`border border-slate-200 px-4 py-3 ${isUnprocessed ? 'text-yellow-700' : 'text-slate-700'}`}>
-                            {item.pinyin || (isUnprocessed ? <span className="text-xs text-yellow-600">(未处理)</span> : '-')}
+                          <td className={`border border-white/10 px-4 py-3 ${isUnprocessed ? 'text-yellow-200' : 'text-white/90'}`}>
+                            {item.pinyin || (isUnprocessed ? <span className="text-xs text-yellow-300">(未处理)</span> : '-')}
                           </td>
                         </tr>
                       )
@@ -719,7 +727,7 @@ Credits: 词曲：XXX
             <button
               onClick={handleGeneratePPTX}
               disabled={isGenerating || preview.length === 0 || !uploadedFile || !templateBase64}
-              className="mt-6 w-full bg-slate-900 text-white font-serif font-semibold py-3 px-6 rounded-lg shadow-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="mt-6 w-full glass-button text-white font-serif font-semibold py-3 px-6 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isGenerating ? (
                 <>
@@ -734,48 +742,48 @@ Credits: 词曲：XXX
         )}
 
         {/* Instructions */}
-        <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-200 p-8">
-          <h2 className="text-2xl font-serif font-bold mb-6 text-slate-900">使用说明 | Instructions</h2>
-          <ol className="space-y-4 text-sm text-slate-700 font-serif-body">
+        <div className="glass-card glass-card-hover rounded-2xl p-8">
+          <h2 className="text-2xl font-serif font-bold mb-6 text-white drop-shadow-lg">使用说明 | Instructions</h2>
+          <ol className="space-y-4 text-sm text-white/90 font-serif-body">
             <li className="flex gap-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-serif font-bold text-sm">1</span>
+              <span className="flex-shrink-0 w-8 h-8 rounded-full glass-button text-white flex items-center justify-center font-serif font-bold text-sm">1</span>
               <div>
-                <p className="font-semibold text-slate-900 mb-1">下载示例模板 | Download Sample Template</p>
-                <p className="text-slate-600">点击上方"查看示例模板"链接下载模板文件 | Click "View Sample Template" above to download the template file</p>
+                <p className="font-semibold text-white mb-1 drop-shadow-lg">下载示例模板 | Download Sample Template</p>
+                <p className="text-white/80">点击上方"查看示例模板"链接下载模板文件 | Click "View Sample Template" above to download the template file</p>
               </div>
             </li>
             <li className="flex gap-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-serif font-bold text-sm">2</span>
+              <span className="flex-shrink-0 w-8 h-8 rounded-full glass-button text-white flex items-center justify-center font-serif font-bold text-sm">2</span>
               <div>
-                <p className="font-semibold text-slate-900 mb-1">替换背景并确保对比度 | Replace Background & Ensure Contrast</p>
-                <p className="text-slate-600">在 PowerPoint 中打开模板，替换背景图片/颜色，确保文字清晰可读 | Open template in PowerPoint, replace background, ensure text is readable</p>
+                <p className="font-semibold text-white mb-1 drop-shadow-lg">替换背景并确保对比度 | Replace Background & Ensure Contrast</p>
+                <p className="text-white/80">在 PowerPoint 中打开模板，替换背景图片/颜色，确保文字清晰可读 | Open template in PowerPoint, replace background, ensure text is readable</p>
               </div>
             </li>
             <li className="flex gap-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-serif font-bold text-sm">3</span>
+              <span className="flex-shrink-0 w-8 h-8 rounded-full glass-button text-white flex items-center justify-center font-serif font-bold text-sm">3</span>
               <div>
-                <p className="font-semibold text-slate-900 mb-1">准备歌词并格式化 | Prepare & Format Lyrics</p>
-                <p className="text-slate-600">按照占位符格式准备歌词：使用 "Title:" 和 "Credits:" 添加元数据，使用 [Verse], [Chorus] 等标记段落 | Format lyrics with "Title:" and "Credits:" for metadata, use [Verse], [Chorus] for sections</p>
+                <p className="font-semibold text-white mb-1 drop-shadow-lg">准备歌词并格式化 | Prepare & Format Lyrics</p>
+                <p className="text-white/80">按照占位符格式准备歌词：使用 "Title:" 和 "Credits:" 添加元数据，使用 [Verse], [Chorus] 等标记段落 | Format lyrics with "Title:" and "Credits:" for metadata, use [Verse], [Chorus] for sections</p>
               </div>
             </li>
             <li className="flex gap-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-serif font-bold text-sm">4</span>
+              <span className="flex-shrink-0 w-8 h-8 rounded-full glass-button text-white flex items-center justify-center font-serif font-bold text-sm">4</span>
               <div>
-                <p className="font-semibold text-slate-900 mb-1">上传模板并粘贴歌词 | Upload Template & Paste Lyrics</p>
-                <p className="text-slate-600">上传您修改后的模板文件，然后在右侧文本框中粘贴格式化后的歌词 | Upload your modified template file, then paste formatted lyrics in the text area</p>
+                <p className="font-semibold text-white mb-1 drop-shadow-lg">上传模板并粘贴歌词 | Upload Template & Paste Lyrics</p>
+                <p className="text-white/80">上传您修改后的模板文件，然后在右侧文本框中粘贴格式化后的歌词 | Upload your modified template file, then paste formatted lyrics in the text area</p>
               </div>
             </li>
             <li className="flex gap-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-serif font-bold text-sm">5</span>
+              <span className="flex-shrink-0 w-8 h-8 rounded-full glass-button text-white flex items-center justify-center font-serif font-bold text-sm">5</span>
               <div>
-                <p className="font-semibold text-slate-900 mb-1">点击处理歌词 | Click Process Lyrics</p>
-                <p className="text-slate-600">点击"处理歌词"按钮，等待处理完成后预览结果，然后点击"生成 PPTX"下载幻灯片 | Click "Process Lyrics", review preview, then click "Generate PPTX" to download</p>
+                <p className="font-semibold text-white mb-1 drop-shadow-lg">点击处理歌词 | Click Process Lyrics</p>
+                <p className="text-white/80">点击"处理歌词"按钮，等待处理完成后预览结果，然后点击"生成 PPTX"下载幻灯片 | Click "Process Lyrics", review preview, then click "Generate PPTX" to download</p>
               </div>
             </li>
           </ol>
-          <div className="mt-6 pt-6 border-t border-slate-200">
-            <p className="text-xs text-slate-500 font-serif-body">
-              <strong className="text-slate-700">提示 Tips:</strong> AI 生成拼音遵循 "祢 → Nǐ" 规则，其他拼音均为小写带声调 (wǒ lái dào)。每张幻灯片显示 2 行，自动处理奇数行数。 | AI follows "祢 → Nǐ" rule, all other Pinyin lowercase with tone marks. 2 lines per slide, handles odd counts.
+          <div className="mt-6 pt-6 border-t border-white/20">
+            <p className="text-xs text-white/80 font-serif-body">
+              <strong className="text-white">提示 Tips:</strong> AI 生成拼音遵循 "祢 → Nǐ" 规则，其他拼音均为小写带声调 (wǒ lái dào)。每张幻灯片显示 2 行，自动处理奇数行数。 | AI follows "祢 → Nǐ" rule, all other Pinyin lowercase with tone marks. 2 lines per slide, handles odd counts.
             </p>
           </div>
         </div>
