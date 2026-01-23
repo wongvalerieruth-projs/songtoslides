@@ -1,15 +1,9 @@
 import './globals.css'
-import { Playfair_Display, Lora } from 'next/font/google'
+import { Inter } from 'next/font/google'
 
-const playfair = Playfair_Display({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-playfair',
-  display: 'swap',
-})
-
-const lora = Lora({
-  subsets: ['latin'],
-  variable: '--font-lora',
+  variable: '--font-inter',
   display: 'swap',
 })
 
@@ -24,9 +18,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="zh-CN" className={`${playfair.variable} ${lora.variable}`}>
-      <body>{children}</body>
+    <html lang="zh-CN" className={inter.variable}>
+      <body className="font-sans">{children}</body>
     </html>
   )
 }
-
